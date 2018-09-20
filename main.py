@@ -8,7 +8,7 @@ from scipy.optimize import minimize
 
 
 class Elnes_fitter:
-
+    #class to manipulate various elnes spc
     def __init__(self, expt_data):
         # Elnes fitter needs to be called with a string corresponding to the
         # .msa file
@@ -221,7 +221,7 @@ class Elnes_fitter:
 
 
 class Spectrum:
-
+    #class for the various elnes spectra
     def __init__(self, case_name):
         self.case_name = str(case_name)
         self.scissor_shift = 0
