@@ -1,7 +1,7 @@
 import numpy as np
 import scipy
-from scipy import interpolate
 import matplotlib.pyplot as plt
+from scipy import interpolate
 import pandas as pd
 from scipy.integrate import simps
 from scipy.optimize import minimize
@@ -13,8 +13,8 @@ class Elnes_fitter:
     def __init__(self, expt_data):
         self.element_edge = "Lithium K Edge, 55eV"
         self.edge_location = 55
-        self.plot_region = [55, 80]
-        self.smoother_factor = 5  # how much to smooth the experimental data
+        self.plot_region = [55, 70]
+        self.smoother_factor = 40  # how much to smooth the experimental data
         self.vector_length = 2000
         self.fig = plt.figure()
         self.ax = self.fig.add_subplot(111)
@@ -41,6 +41,9 @@ class Elnes_fitter:
         spectrum.scale_factor = max(
             self.expt_data.intensities) / max(spectrum.intensities)
         self.simulation_list.append(spectrum)
+        self.point_getter(spectrum)
+        self.point_getter(spectrum)
+        self.peak_align(spectrum)
         return
 
     def expt_loader(self, spectrum):
@@ -50,7 +53,7 @@ class Elnes_fitter:
         spectrum.energy_values = np.array(data['#SPECTRUM'])
         spectrum.intensities = np.array(
             data['    : Spectral Data Starts Here'])
-        new_energy_array = np.linspace(spectrum.energy_values[self.nearest_index_value(spectrum.energy_values,self.plot_region[0])],spectrum.energy_values[self.nearest_index_value(spectrum.energy_values,self.plot_region[1])],self.vector_length*self.smoother_factor)
+        new_energy_array = np.linspace(spectrum.energy_values[self.nearest_index_value(spectrum.energy_values,self.plot_region[0])],spectrum.energy_values[self.nearest_index_value(spectrum.energy_values,self.plot_region[1])],self.vector_length)
         spectrum.intensities = scipy.interpolate.spline(spectrum.energy_values,spectrum.intensities,new_energy_array) - np.average(spectrum.intensities[0:10])
         spectrum.energy_values = new_energy_array
         spectrum.data_type = "experimental"
@@ -61,13 +64,20 @@ class Elnes_fitter:
 
         return
 
-    def data_smoother(self, spectrum, divisor):
+    def data_smoother(self, spectrum,divisor):
         # function that adds adjacent data points to smooth noise in
-        # experimental data
-        spectrum.energy_values = spectrum.energy_values[::divisor]
-        spectrum.intensities = [sum(spectrum.intensities[
+        # experimental data, and then interpolates the data back to its original length
+
+        #spectrum.energy_values = spectrum.energy_values[::divisor]
+        y_values = [sum(spectrum.intensities[
                                     i:i + divisor]) / divisor for i in range(0, len(spectrum.intensities), divisor)]
 
+        x_values = spectrum.energy_values[::divisor]
+
+
+        splined_mapping = scipy.interpolate.UnivariateSpline(x_values,y_values)
+        #splined_mapping.set_smoothing_factor(0.5)
+        spectrum.intensities = splined_mapping(spectrum.energy_values)
 
         return
 
@@ -82,17 +92,18 @@ class Elnes_fitter:
         return
 
     def point_getter(self, spectrum):
-        # in combination with onclick, function takes a spectrum, plots it and
+        # in combination with onclick, function takes a spectrum, plots it, and waits for it to be clicked
         self.coords = []
         self.spectrum_plotter(self.expt_data)
         self.spectrum_plotter(spectrum)
         self.plot_maker()
         self.cid = self.ax.figure.canvas.mpl_connect(
             'button_press_event', self.onclick)
-        raw_input() #python 2 madness for python3, use input
+        raw_input("press enter to continue") #python 2 madness for python3, use input
         return
 
     def peak_align(self, spectrum):
+        #aligns peak to appropriate location, sets its data length correctly as well
         self.peak_finder(spectrum, self.coords[0][0])
         self.peak_finder(self.expt_data, self.coords[1][0])
         spectrum.scissor_shift = (self.expt_data.energy_values[
@@ -122,14 +133,40 @@ class Elnes_fitter:
         return niv
 
 
-    def minimizer(self, fit_var):
+
+
+    def final_spectrum_plotter(self):
+        final_intensities = sum(sim.intensities*sim.scale_factor for sim in self.simulation_list)
+        self.spectrum_plotter(self.expt_data)
+        for sim in self.simulation_list:
+            self.spectrum_plotter(sim)
+        plt.plot(self.expt_data.energy_values,final_intensities, label = "Fitted Spectra")
+        self.plot_maker()
+
+
+    def spectrum_fitter(self):
+        guess = np.array([0])
+        for sim in self.simulation_list:
+            guess = np.append(guess, sim.scale_factor)
+
+        fit = minimize(self.minimizer,guess, method='Powell')
+        self.expt_data.intensities = self.expt_data.intensities + fit.x[0] #setting virtical v_offset
+        scale_factor_index = 1
+        for sim in self.simulation_list:
+            sim.scale_factor = fit.x[scale_factor_index]
+            scale_factor_index += 1
+
+
+
+    def minimizer(self, scale_factor_array):
+        expt_offset = scale_factor_array[0]
+        scale_factor_array = scale_factor_array[1:]
         #*args will be the fit parameters, function to be minimized
-
         x_int_values = self.expt_data.energy_values
-        y_int_values = self.expt_data.intensities - sum([sim.intensities*fit_var for sim in self.simulation_list])
+        y_int_values = self.expt_data.intensities +expt_offset-np.dot(np.transpose(np.array([sim.intensities for sim in self.simulation_list])),scale_factor_array)
 
-        minimizer = simps(np.abs(y_int_values),x_int_values)
-        return minimizer
+        integral_value = simps(np.abs(y_int_values),x_int_values)
+        return integral_value
 
 
 
@@ -158,7 +195,7 @@ class Elnes_fitter:
 
     def spectrum_plotter(self, spectrum):
         self.ax.plot(spectrum.energy_values + spectrum.scissor_shift,
-                     spectrum.scale_factor * spectrum.intensities, label=spectrum.legend_label)
+                     spectrum.scale_factor * spectrum.intensities+spectrum.v_offset, label=spectrum.legend_label)
 
 
 class Spectrum:
@@ -166,6 +203,7 @@ class Spectrum:
     def __init__(self, case_name):
         self.case_name = str(case_name)
         self.scissor_shift = 0
+        self.v_offset = 0
         self.scale_factor = 1
         self.legend_label = str(case_name)
         self.energy_values = np.array([])
