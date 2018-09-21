@@ -7,11 +7,18 @@ from scipy.integrate import simps
 from scipy.optimize import minimize
 
 
+#error format
+# if bool
+# sys.exit(extistring)
+
+
 class Elnes_fitter:
-    #class to manipulate various elnes spc
+    # class to manipulate various elnes spc
+
     def __init__(self, expt_data):
         # Elnes fitter needs to be called with a string corresponding to the
         # .msa file
+
         self.element_edge = "Lithium K Edge, 55eV"
         self.edge_location = 55
         self.plot_region = [55, 70]
@@ -124,20 +131,24 @@ class Elnes_fitter:
         # aligns peak to appropriate location, sets its data length correctly
         # requires point getter to have been run and coords to have non zero length
         # as well
-        self.peak_finder(spectrum, self.coords[0][0])
-        self.peak_finder(self.expt_data, self.coords[1][0])
-        spectrum.scissor_shift = (self.expt_data.energy_values[
-                                  self.expt_data.peak_index] - spectrum.energy_values[spectrum.peak_index])
-        new_energy_array = np.linspace(spectrum.energy_values[self.nearest_index_value(spectrum.energy_values + spectrum.scissor_shift, self.plot_region[
-                                       0])], spectrum.energy_values[self.nearest_index_value(spectrum.energy_values + spectrum.scissor_shift, self.plot_region[1])], self.vector_length)
-        spectrum.intensities = scipy.interpolate.spline(
-            spectrum.energy_values, spectrum.intensities, new_energy_array)
-        spectrum.energy_values = new_energy_array
+        if len(coords) < 2:
+            print( "Run point_getter first!")
+            return
+        else
+            self.peak_finder(spectrum, self.coords[0][0])
+            self.peak_finder(self.expt_data, self.coords[1][0])
+            spectrum.scissor_shift = (self.expt_data.energy_values[
+                                      self.expt_data.peak_index] - spectrum.energy_values[spectrum.peak_index])
+            new_energy_array = np.linspace(spectrum.energy_values[self.nearest_index_value(spectrum.energy_values + spectrum.scissor_shift, self.plot_region[
+                                           0])], spectrum.energy_values[self.nearest_index_value(spectrum.energy_values + spectrum.scissor_shift, self.plot_region[1])], self.vector_length)
+            spectrum.intensities = scipy.interpolate.spline(
+                spectrum.energy_values, spectrum.intensities, new_energy_array)
+            spectrum.energy_values = new_energy_array
 
-        self.spectrum_plotter(self.expt_data)
-        self.spectrum_plotter(spectrum)
-        self.plot_maker()
-        return
+            self.spectrum_plotter(self.expt_data)
+            self.spectrum_plotter(spectrum)
+            self.plot_maker()
+            return
 
     def peak_finder(self, spectrum, xcoord):
         # function takes a spectrum and a peak coordinate (float) as input and
@@ -160,6 +171,7 @@ class Elnes_fitter:
     def final_spectrum_plotter(self):
         # once all spectras are aligned and fitted, this function plots the
         # final aligned sum, the expt data and each individual spectrum
+
         final_intensities = sum(
             sim.intensities * sim.scale_factor for sim in self.simulation_list)
         self.spectrum_plotter(self.expt_data)
@@ -172,6 +184,9 @@ class Elnes_fitter:
     def spectrum_fitter(self):
         # function fits all spectra loaded into the simulation list to the expt
         # data, by integrating the area under the cures
+        if len(self.simulation_list)==0:
+            print("Load simulation data with broadspec_loader")
+            return
         guess = np.array([0])  # sets virtical offset guess to zero
         for sim in self.simulation_list:
             guess = np.append(guess, sim.scale_factor)
@@ -183,6 +198,8 @@ class Elnes_fitter:
         for sim in self.simulation_list:
             sim.scale_factor = fit.x[scale_factor_index]
             scale_factor_index += 1
+
+        return
 
     def minimizer(self, scale_factor_array):
         # function to be minimized, input is a vector, satrting with the virtical offset, and followed by the scale
@@ -200,9 +217,8 @@ class Elnes_fitter:
         integral_value = simps(np.abs(y_int_values), x_int_values)
         return integral_value
 
-
     def plot_maker(self):
-        #sets up all of the aesthetics of plots and generates the legend
+        # sets up all of the aesthetics of plots and generates the legend
         sefl.ax.title(self.element_edge)
         self.ax.set_xlim(self.plot_region)
         self.ax.set_xlabel("Energy loss (eV)")
@@ -221,7 +237,8 @@ class Elnes_fitter:
 
 
 class Spectrum:
-    #class for the various elnes spectra
+    # class for the various elnes spectra
+
     def __init__(self, case_name):
         self.case_name = str(case_name)
         self.scissor_shift = 0
