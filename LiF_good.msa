@@ -14,9 +14,6 @@
 #SIGNALTYPE  : EELS
 #XLABEL      : 
 #COMMENT     : File created by HyperSpy version 1.3
-#BEAMKV      : 30.0
-#CONVANGLE   : 2.0
-#COLLANGLE   : 5.0
 #SPECTRUM,    : Spectral Data Starts Here
 49.7223, 0.00887654
 49.8334, 0.0134881

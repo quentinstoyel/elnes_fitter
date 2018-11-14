@@ -5,7 +5,7 @@ from scipy import interpolate
 import pandas as pd
 from scipy.integrate import simps
 from scipy.optimize import minimize
-
+import unittest
 
 #error format
 # if bool
@@ -21,8 +21,8 @@ class Elnes_fitter:
 
         self.element_edge = "Lithium K Edge, 55eV"
         self.edge_location = 55
-        self.plot_region = [55, 70]
-        self.smoother_factor = 40  # how much to smooth the experimental data
+        self.plot_region = [55, 75] #region to plot and integrate
+        self.smoother_factor = 30  # how much to smooth the experimental data
         self.vector_length = 2000  # how long we want the vectors
         # initializing figures
         self.fig = plt.figure()
@@ -35,6 +35,7 @@ class Elnes_fitter:
         return
 
     def __call__(self, spectrum):
+        #what to do when calling the class
         # self.broadspec_loader(spectrum)
         # self.point_getter(spectrum)
         return
@@ -85,7 +86,7 @@ class Elnes_fitter:
         # function that adds adjacent data points to smooth noise in
         # experimental data, and then interpolates the data back to its
         # original length
-
+        print divisor
         #spectrum.energy_values = spectrum.energy_values[::divisor]
         y_values = [sum(spectrum.intensities[
             i:i + divisor]) / divisor for i in range(0, len(spectrum.intensities), divisor)]
@@ -131,10 +132,10 @@ class Elnes_fitter:
         # aligns peak to appropriate location, sets its data length correctly
         # requires point getter to have been run and coords to have non zero length
         # as well
-        if len(coords) < 2:
+        if len(self.coords) < 2:
             print( "Run point_getter first!")
             return
-        else
+        else:
             self.peak_finder(spectrum, self.coords[0][0])
             self.peak_finder(self.expt_data, self.coords[1][0])
             spectrum.scissor_shift = (self.expt_data.energy_values[
@@ -219,7 +220,7 @@ class Elnes_fitter:
 
     def plot_maker(self):
         # sets up all of the aesthetics of plots and generates the legend
-        sefl.ax.title(self.element_edge)
+        #self.ax.title(self.element_edge)
         self.ax.set_xlim(self.plot_region)
         self.ax.set_xlabel("Energy loss (eV)")
         self.ax.set_ylabel("Intensity (arb units)")
@@ -234,6 +235,42 @@ class Elnes_fitter:
     def spectrum_plotter(self, spectrum):
         self.ax.plot(spectrum.energy_values + spectrum.scissor_shift,
                      spectrum.scale_factor * spectrum.intensities + spectrum.v_offset, label=spectrum.legend_label)
+
+    def plot_all(self):
+        #function that plots all loaded spectra and their
+        for spectrum in self.simulation_list:
+            self.spectrum_plotter(spectrum)
+        self.spectrum_plotter(self.expt_data)
+        return
+
+    def manual_fitter(self):
+        #function that adds all simulation spectra and adds these to the
+        self.manual = Spectrum("Manual")
+        scale_factor_array = np.array([sim.scale_factor for sim in self.simulation_list])
+        intensities_array = np.array([sim.intensities for sim in self.simulation_list])
+        self.manual.intensities = np.matmul(scale_factor_array, intensities_array)
+        self.manual.energy_values = self.expt_data.energy_values
+
+        self.spectrum_plotter(self.manual)
+
+
+class TestElnesFitter(unittest.TestCase):
+
+
+    def test_spectrum_decorator(func):
+        def wrapper(*args):
+            #quick and dirty spectrum with some peaks
+            test_spectrum = Spectrum('test_spectrum')
+            test_spectrum.energy_values = np.arange(10,100,0.1)
+            test_spectrum.intensities = (test_spectrum.energy_values-50)**3 + 2500
+            func(*args)
+            return wrapper
+
+
+    @test_spectrum_decorator
+    def test_data_smoother():
+        data_smoother
+
 
 
 class Spectrum:
